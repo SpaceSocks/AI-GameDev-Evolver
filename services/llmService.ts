@@ -1,38 +1,32 @@
+import { LlmProvider } from '../types';
+import { callGemini } from './geminiService';
+import { callOpenAI } from './openAiService';
 
+interface LlmRequest {
+  provider: LlmProvider;
+  prompt: string;
+  modelName: string;
+  apiKey: string; // For OpenAI-compatible
+  baseUrl?: string; // For OpenAI-compatible
+}
 
-import { LlmConfig } from '../types';
-import * as geminiService from './geminiService';
-import * as openAiService from './openAiService';
+interface LlmResponse {
+  content: string;
+  inputChars: number;
+  outputChars: number;
+}
 
-export const generateInitialCode = (config: LlmConfig, gameConcept: string, gameType: 'interactive' | 'simulation') => {
-  switch (config.provider) {
+export const callLlm = async (request: LlmRequest): Promise<LlmResponse> => {
+  const { provider, prompt, modelName, apiKey, baseUrl } = request;
+
+  switch (provider) {
     case 'gemini':
-      return geminiService.generateInitialCode(config, gameConcept, gameType);
+      return callGemini({ prompt, modelName });
     case 'openai':
-      return openAiService.generateInitialCode(config, gameConcept, gameType);
+      return callOpenAI({ prompt, modelName, apiKey, baseUrl });
     default:
-      throw new Error(`Unsupported LLM provider: ${config.provider}`);
+      // This check is useful for JavaScript environments without full TypeScript support
+      const exhaustiveCheck: never = provider;
+      throw new Error(`Unsupported LLM provider: ${exhaustiveCheck}`);
   }
-};
-
-export const improveCode = (config: LlmConfig, code: string, screenshot: string, gameConcept: string, devNotesHistory: string[], newDevNote?: string) => {
-    switch (config.provider) {
-        case 'gemini':
-            return geminiService.improveCode(config, code, screenshot, gameConcept, devNotesHistory, newDevNote);
-        case 'openai':
-            return openAiService.improveCode(config, code, screenshot, gameConcept, devNotesHistory, newDevNote);
-        default:
-            throw new Error(`Unsupported LLM provider: ${config.provider}`);
-    }
-};
-
-export const generateRandomIdea = (config: LlmConfig, gameType: 'interactive' | 'simulation') => {
-    switch (config.provider) {
-        case 'gemini':
-            return geminiService.generateRandomIdea(config, gameType);
-        case 'openai':
-            return openAiService.generateRandomIdea(config, gameType);
-        default:
-            throw new Error(`Unsupported LLM provider: ${config.provider}`);
-    }
 };

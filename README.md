@@ -1,8 +1,8 @@
-# AI GameDev Evolver
+# EvoForge
 
 ## High-Level Concept
 
-The **AI GameDev Evolver** is a powerful web-based tool for rapid game prototyping and development, driven entirely by a Large Language Model (LLM). It transforms the traditional game development process into an automated, iterative loop where a user provides a high-level concept, and an AI takes over the entire development lifecycle.
+**EvoForge** is a powerful web-based tool for rapid game prototyping and development, driven entirely by a Large Language Model (LLM). It transforms the traditional game development process into an automated, iterative loop where a user provides a high-level concept, and an AI takes over the entire development lifecycle.
 
 The application's core philosophy is **"evolutionary development."** The AI doesn't just generate a single version of a game; it continuously analyzes, critiques, improves, and even bug-fixes its own code in a transparent, observable loop. This allows users to witness a game evolve from a simple concept into a more complex and refined product, guiding the process with natural language instructions.
 
@@ -34,7 +34,7 @@ The user is not just a passive observer. They can actively steer the AI's develo
 -   **High-Priority Tasks:** The AI is explicitly instructed to treat this checklist as its highest priority. In each iteration, it must review the list and address an outstanding note before it can pursue its own ideas for improvement.
 
 ### 4. Unprecedented Transparency
-The AI GameDev Evolver is designed to make the AI's "thinking" process as transparent as possible.
+EvoForge is designed to make the AI's "thinking" process as transparent as possible.
 -   **Evolution Log:** A detailed, real-time log shows every action the AI takes. More importantly, it displays the AI's structured thoughts for each iteration:
     -   **[Analysis]:** The AI's breakdown of the current game state, code, and visuals.
     -   **[Thought]:** Its reasoning process for deciding what to do next, including how it's addressing developer notes.

@@ -1,25 +1,25 @@
 export enum Status {
-    Idle = 'IDLE',
-    Generating = 'GENERATING',
-    Improving = 'IMPROVING',
-    Stopped = 'STOPPED',
-    Error = 'ERROR'
+  Idle = 'Idle',
+  Generating = 'Generating Code',
+  Improving = 'Improving Code',
+  Error = 'Error',
+  Stopped = 'Stopped',
+  Finished = 'Finished',
 }
 
 export type LlmProvider = 'gemini' | 'openai';
 
-export interface LlmConfig {
-    provider: LlmProvider;
-    apiKey: string;
-    baseUrl: string;
-    modelName: string;
+export interface UsageStat {
+  iteration: number;
+  task: 'generation' | 'improvement';
+  provider: LlmProvider;
+  inputChars: number;
+  outputChars: number;
 }
 
-export interface UsageStat {
-    iteration: number;
-    task: string;
-    provider: LlmProvider;
-    model: string;
-    inputChars: number;
-    outputChars: number;
+export interface Iteration {
+  code: string;
+  screenshot?: string;
 }
+
+export type GameType = 'simulation' | 'interactive';

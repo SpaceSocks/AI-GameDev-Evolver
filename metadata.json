@@ -1,5 +1,5 @@
 {
-  "name": "AI GameDev Evolver",
+  "name": "EvoForge",
   "description": "An application where a user provides a game concept, and an AI iteratively develops, critiques, and improves the game, fixing its own bugs and adding features in a continuous loop.",
   "requestFramePermissions": []
 }
