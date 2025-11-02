@@ -10,6 +10,7 @@ interface GameDisplayProps {
 
 export interface GameDisplayRef {
   captureScreenshot: () => Promise<string>;
+  captureCompressedScreenshot: () => Promise<string>;
 }
 
 export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlContent, onLoad, isLoading, statusText, currentIteration }, ref) => {
@@ -62,6 +63,65 @@ export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlC
 
         // The iframe's onLoad event can be unreliable with srcdoc and dynamic content.
         // We start polling shortly after the content is set.
+        setTimeout(pollForCanvas, 250);
+      });
+    },
+    
+    captureCompressedScreenshot: async (): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const iframe = iframeRef.current;
+        if (!iframe || !iframe.contentWindow) {
+          return reject(new Error('Iframe not ready'));
+        }
+        
+        const maxAttempts = 20;
+        let attempts = 0;
+
+        const pollForCanvas = () => {
+            try {
+                const canvas = iframe.contentWindow?.document.querySelector('canvas') as HTMLCanvasElement;
+                if (canvas) {
+                    setTimeout(() => {
+                        try {
+                            // Create a temporary canvas for compression
+                            const tempCanvas = document.createElement('canvas');
+                            const ctx = tempCanvas.getContext('2d');
+                            if (!ctx) {
+                                reject(new Error('Could not get 2d context'));
+                                return;
+                            }
+                            
+                            // Resize to 256px width while maintaining aspect ratio
+                            const targetWidth = 256;
+                            const aspectRatio = canvas.height / canvas.width;
+                            tempCanvas.width = targetWidth;
+                            tempCanvas.height = Math.floor(targetWidth * aspectRatio);
+                            
+                            // Draw the original canvas onto the temp canvas (this does the scaling)
+                            ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, tempCanvas.width, tempCanvas.height);
+                            
+                            // Compress with low quality JPEG
+                            const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.5);
+                            const base64 = dataUrl.split(',')[1];
+                            resolve(base64);
+                        } catch(e) {
+                           console.error('Compressed screenshot capture failed:', e);
+                           reject(new Error('Failed to capture compressed screenshot.'));
+                        }
+                    }, 100);
+                } else {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(pollForCanvas, 250);
+                    } else {
+                        reject(new Error('Canvas not found in iframe after 5 seconds.'));
+                    }
+                }
+            } catch (e) {
+                 reject(new Error('Error accessing iframe content. This might be a cross-origin issue if loading external scripts failed.'));
+            }
+        };
+
         setTimeout(pollForCanvas, 250);
       });
     },

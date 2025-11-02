@@ -4,7 +4,6 @@ import { UserInput } from './components/UserInput';
 import { GameTypeSelector } from './components/GameTypeSelector';
 import { ApiConfig } from './components/ApiConfig';
 import { EvolutionConfig } from './components/EvolutionConfig';
-import { ScreenshotConfig } from './components/ScreenshotConfig';
 import { UserFeedback } from './components/UserFeedback';
 import { TimingStats } from './components/TimingStats';
 import { Controls } from './components/Controls';
@@ -114,7 +113,7 @@ const createImprovementPrompt = (
     type: GameType,
     notes: string[],
     previousCode: string,
-    previousScreenshots: string[], // base64 array - NOT included in prompt for token efficiency
+    compressedScreenshot: string, // Single compressed base64 screenshot
     iterationHistory: Iteration[]
 ): string => {
     const iterationNumber = iterationHistory.length;
@@ -127,9 +126,16 @@ const createImprovementPrompt = (
     // Always include full code (LLM needs it), but make prompt concise
     const codeContext = `**Current Code** (${previousCode.length.toLocaleString()} chars):\n\`\`\`html\n${previousCode}\n\`\`\``;
 
-    // Brief screenshot description instead of base64
-    const screenshotDescription = previousScreenshots.length > 0
-        ? `**Visual State**: ${previousScreenshots.length} screenshot(s) captured. Visually inspect the running game for: bugs, jitter, performance issues, UI problems, or gameplay issues.`
+    // Include compressed screenshot if available
+    const screenshotSection = compressedScreenshot 
+        ? `**Current Visual State (Compressed)**:
+Here is a compressed screenshot of the running game. Analyze it visually for bugs, visual issues, or gameplay problems:
+
+\`\`\`
+${compressedScreenshot}
+\`\`\`
+
+Use this visual to understand the current state and identify specific visual issues to fix.`
         : `**Visual State**: Analyze the game visually for issues.`;
 
     // Concise context
@@ -156,7 +162,7 @@ ${userNotes}
 
 ${codeContext}
 
-${screenshotDescription}
+${screenshotSection}
 
 **Improvement Rules**:
 - Fix bugs first (highest priority)
@@ -179,8 +185,6 @@ const App: React.FC = () => {
   const [baseUrl, setBaseUrl] = useState(localStorage.getItem('evoforge_baseUrl') || ''); // Only for OpenAI
   const [modelName, setModelName] = useState(localStorage.getItem('evoforge_modelName') || 'gemini-2.5-pro');
   const [maxIterations, setMaxIterations] = useState(10);
-  const [screenshotCount, setScreenshotCount] = useState(parseInt(localStorage.getItem('evoforge_screenshotCount') || '1'));
-  const [screenshotInterval, setScreenshotInterval] = useState(parseInt(localStorage.getItem('evoforge_screenshotInterval') || '1'));
 
   // App status state
   const [status, setStatus] = useState<Status>(Status.Idle);
@@ -233,14 +237,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('evoforge_modelName', modelName);
   }, [modelName]);
-  
-  useEffect(() => {
-    localStorage.setItem('evoforge_screenshotCount', screenshotCount.toString());
-  }, [screenshotCount]);
-  
-  useEffect(() => {
-    localStorage.setItem('evoforge_screenshotInterval', screenshotInterval.toString());
-  }, [screenshotInterval]);
   
   useEffect(() => {
     if (isRunning) {
@@ -394,25 +390,19 @@ const App: React.FC = () => {
             const iterStartTime = Date.now();
             log(`--- Starting Iteration ${iterNum}/${maxIterations + 1} ---`);
             
-            // Capture multiple screenshots for better analysis
-            log(`Capturing ${screenshotCount} screenshot(s) with ${screenshotInterval}s interval...`);
-            const screenshots: string[] = [];
-            for (let s = 0; s < screenshotCount; s++) {
-                if (s > 0) {
-                    await new Promise(resolve => setTimeout(resolve, screenshotInterval * 1000));
-                }
-                const captured = await gameDisplayRef.current?.captureScreenshot();
-                if (captured) screenshots.push(captured);
-            }
-            log(`Screenshots captured: ${screenshots.length}/${screenshotCount}`);
+            // Capture one compressed screenshot for AI analysis (wait 1.5s for game to stabilize)
+            log(`Waiting 1.5s for game to stabilize before capturing screenshot...`);
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            log(`Capturing compressed screenshot for AI visual analysis...`);
+            const compressedScreenshot = await gameDisplayRef.current?.captureCompressedScreenshot();
             
             const notesCount = developerNotesRef.current.length;
             if (notesCount > 0) {
                 log(`Processing ${notesCount} developer note(s): ${developerNotesRef.current.slice(0, 3).join(', ')}${notesCount > 3 ? '...' : ''}`);
             }
             
-            log(`Building improvement prompt (screenshots captured for visual reference only, not included in prompt to save tokens)...`);
-            const improvementPrompt = createImprovementPrompt(gameDescription, gameType, developerNotesRef.current, currentCode, screenshots, iterationHistoryRef.current);
+            log(`Building improvement prompt with compressed screenshot...`);
+            const improvementPrompt = createImprovementPrompt(gameDescription, gameType, developerNotesRef.current, currentCode, compressedScreenshot || '', iterationHistoryRef.current);
             const promptSizeKB = (improvementPrompt.length / 1024).toFixed(1);
             const estimatedTokens = Math.ceil(improvementPrompt.length / 4); // Rough estimate: ~4 chars per token
             log(`Sending improvement request to LLM (prompt: ${improvementPrompt.length.toLocaleString()} chars / ~${estimatedTokens.toLocaleString()} tokens / ${promptSizeKB}KB)`);
@@ -473,7 +463,7 @@ const App: React.FC = () => {
         isRunningRef.current = false; // Ensure ref is updated on error
     }
 
-  }, [gameDescription, gameType, provider, modelName, apiKey, baseUrl, maxIterations, screenshotCount, screenshotInterval, log]);
+  }, [gameDescription, gameType, provider, modelName, apiKey, baseUrl, maxIterations, log]);
 
 
   return (
@@ -494,13 +484,6 @@ const App: React.FC = () => {
                 apiKey={apiKey} setApiKey={setApiKey}
                 baseUrl={baseUrl} setBaseUrl={setBaseUrl}
                 modelName={modelName} setModelName={setModelName}
-                disabled={isRunning}
-            />
-            <ScreenshotConfig 
-                screenshotCount={screenshotCount}
-                setScreenshotCount={setScreenshotCount}
-                screenshotInterval={screenshotInterval}
-                setScreenshotInterval={setScreenshotInterval}
                 disabled={isRunning}
             />
           </div>
