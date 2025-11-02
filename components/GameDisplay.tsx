@@ -1,58 +1,67 @@
-import React, { useEffect, useState } from 'react';
-import { Status } from '../types';
+import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 interface GameDisplayProps {
-    code: string | null;
-    status: Status;
-    iframeRef: React.RefObject<HTMLIFrameElement>;
-    onLoad: () => void;
+  htmlContent: string | null;
+  onLoad?: () => void;
 }
 
-export const GameDisplay: React.FC<GameDisplayProps> = ({ code, status, iframeRef, onLoad }) => {
-    const [iframeSrc, setIframeSrc] = useState<string | undefined>(undefined);
+export interface GameDisplayRef {
+  captureScreenshot: () => Promise<string>;
+}
 
-    useEffect(() => {
-        let objectUrl: string | undefined;
+export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlContent, onLoad }, ref) => {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-        if (code) {
-            const blob = new Blob([code], { type: 'text/html' });
-            objectUrl = URL.createObjectURL(blob);
-            setIframeSrc(objectUrl);
-        } else {
-            setIframeSrc(undefined);
+  useEffect(() => {
+    if (iframeRef.current && htmlContent) {
+      iframeRef.current.srcdoc = htmlContent;
+    }
+  }, [htmlContent]);
+  
+  useImperativeHandle(ref, () => ({
+    captureScreenshot: async (): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const iframe = iframeRef.current;
+        if (!iframe || !iframe.contentWindow) {
+          return reject(new Error('Iframe not ready'));
         }
-
-        return () => {
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
+        
+        // A short delay to allow the canvas to render before capturing
+        setTimeout(() => {
+          try {
+            const canvas = iframe.contentWindow.document.querySelector('canvas');
+            if (!canvas) {
+              return reject(new Error('Canvas not found in iframe'));
             }
-        };
-    }, [code]);
+            // toDataURL returns a base64 string, but we need to remove the prefix
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+          } catch (e) {
+            console.error('Screenshot capture failed:', e);
+            reject(new Error('Failed to capture screenshot due to security or rendering issues.'));
+          }
+        }, 500);
+      });
+    },
+  }));
 
-    return (
-        <div className="w-full h-full bg-black border-2 border-gray-700 rounded-lg flex items-center justify-center relative overflow-hidden">
-            {iframeSrc ? (
-                <iframe
-                    ref={iframeRef}
-                    src={iframeSrc}
-                    title="Game Preview"
-                    sandbox="allow-scripts allow-same-origin"
-                    onLoad={onLoad}
-                    className="w-full h-full"
-                />
-            ) : (
-                <div className="text-center text-gray-500">
-                    <h2 className="text-xl font-bold mb-2">AI GameDev Evolver</h2>
-                    <p>Enter your game concept and click "Start Evolution"</p>
-                    <p>to begin the generation process.</p>
-                </div>
-            )}
-            {status === Status.Generating && (
-                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
-                    <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-white text-lg font-semibold">Generating Initial Game...</p>
-                 </div>
-            )}
+
+  return (
+    <div className="w-full h-full bg-black border border-gray-700 rounded-lg overflow-hidden">
+      {htmlContent ? (
+        <iframe
+          ref={iframeRef}
+          title="Game Preview"
+          className="w-full h-full"
+          sandbox="allow-scripts allow-same-origin"
+          onLoad={onLoad}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+            <p className="text-gray-500">Game preview will appear here.</p>
         </div>
-    );
-};
+      )}
+    </div>
+  );
+});

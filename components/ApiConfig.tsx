@@ -62,21 +62,23 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
             />
         </div>
     )}
-
-      <div>
-        <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300 mb-1">
-           API Key {provider === 'gemini' ? '(Optional)' : ''}
-        </label>
-        <input
-          type="password"
-          id="apiKey"
-          className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
-          placeholder={provider === 'gemini' ? "Uses pre-configured key if empty" : "Required for cloud services"}
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          disabled={disabled}
-        />
-      </div>
+      {/* FIX: Hide API Key input for Gemini provider per guidelines. */}
+      {provider !== 'gemini' && (
+        <div>
+            <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300 mb-1">
+            API Key
+            </label>
+            <input
+            type="password"
+            id="apiKey"
+            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
+            placeholder="Required for cloud services"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            disabled={disabled}
+            />
+        </div>
+      )}
       <div>
         <label htmlFor="modelName" className="block text-sm font-medium text-gray-300 mb-1">
           Model Name
