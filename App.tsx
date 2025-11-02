@@ -86,7 +86,7 @@ const App: React.FC = () => {
         setIsGeneratingIdea(true);
         addStatus("Generating a random game idea...");
         try {
-            const result = await llmService.generateRandomIdea(llmConfig);
+            const result = await llmService.generateRandomIdea(llmConfig, gameType);
             setGameConcept(result.idea);
             addStatus(`Generated idea: "${result.idea}"`);
         } catch (e: any) {

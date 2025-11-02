@@ -50,9 +50,8 @@ const getAi = () => {
 const generate = async (config: LlmConfig, contents: (string | Part)[], systemInstruction: string) => {
     const ai = getAi();
     
-    const model = ai.models[config.modelName];
-
-    const response = await model.generateContent({
+    const response = await ai.models.generateContent({
+        model: config.modelName,
         contents: [{ role: 'user', parts: contents.map(c => typeof c === 'string' ? { text: c } : c) }],
         config: {
             responseMimeType: "application/json",
@@ -124,13 +123,16 @@ Analyze the code, screenshot, and notes, then generate the improved HTML file.
 };
 
 
-export const generateRandomIdea = async (config: LlmConfig): Promise<{ idea: string, inputChars: number, outputChars: number }> => {
+export const generateRandomIdea = async (config: LlmConfig, gameType: 'interactive' | 'simulation'): Promise<{ idea: string, inputChars: number, outputChars: number }> => {
     const ai = getAi();
-    const prompt = "Generate a single, creative, and concise game concept suitable for a simple web game. The concept should be a short sentence. Example: A platformer where a ninja squirrel collects golden acorns while avoiding robot owls.";
+    const prompt = `Generate a single, creative, and concise concept for a simple web ${gameType}. The concept should be a short sentence. An 'interactive' game involves player controls, while a 'simulation' runs on its own.
+Example for an interactive game: A platformer where a ninja squirrel collects golden acorns.
+Example for a simulation: A simple ecosystem where dots representing sheep eat grass.`;
     
-    const model = ai.models[config.modelName];
-
-    const response = await model.generateContent(prompt);
+    const response = await ai.models.generateContent({
+        model: config.modelName,
+        contents: prompt,
+    });
 
     const idea = response.text.trim();
     return {
