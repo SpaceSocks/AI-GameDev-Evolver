@@ -442,7 +442,7 @@ const App: React.FC = () => {
             log(`Rendering updated game preview...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
             const newScreenshot = await gameDisplayRef.current?.captureScreenshot();
-            const newIteration: Iteration = { code: currentCode, screenshot: newScreenshot };
+            const newIteration: Iteration = { code: currentCode, screenshot: newScreenshot, compressedScreenshot };
 
             setIterationHistory(prev => [...prev, newIteration]);
             iterationHistoryRef.current = [...iterationHistoryRef.current, newIteration];

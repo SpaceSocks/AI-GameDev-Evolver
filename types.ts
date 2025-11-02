@@ -20,6 +20,7 @@ export interface UsageStat {
 export interface Iteration {
   code: string;
   screenshot?: string;
+  compressedScreenshot?: string;
 }
 
 export type GameType = 'simulation' | 'interactive';

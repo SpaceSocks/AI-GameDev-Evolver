@@ -3,6 +3,7 @@ import React from 'react';
 interface Iteration {
   code: string;
   screenshot?: string;
+  compressedScreenshot?: string;
 }
 
 interface IterationHistoryProps {
@@ -19,6 +20,7 @@ const DownloadIcon = () => (
 
 
 export const IterationHistory: React.FC<IterationHistoryProps> = ({ history, onSelect, selectedIndex }) => {
+  const [showCompressedPreview, setShowCompressedPreview] = React.useState<number | null>(null);
   
   const handleDownload = (code: string, index: number) => {
     const blob = new Blob([code], { type: 'text/html' });
@@ -35,32 +37,55 @@ export const IterationHistory: React.FC<IterationHistoryProps> = ({ history, onS
   return (
     <div className="space-y-2">
         {history.map((item, index) => (
-            <div
-                key={index}
-                onClick={() => onSelect(index)}
-                className={`w-full text-left p-2 rounded-md flex items-center gap-4 transition-colors cursor-pointer ${selectedIndex === index ? 'bg-cyan-800/70 ring-2 ring-cyan-400' : 'bg-gray-800 hover:bg-gray-700'}`}
-            >
-                <div className="w-24 h-16 bg-black flex-shrink-0 rounded-md border border-gray-600 flex items-center justify-center">
-                    {item.screenshot ? (
-                        <img src={`data:image/jpeg;base64,${item.screenshot}`} alt={`Iteration ${index + 1} screenshot`} className="w-full h-full object-cover rounded-md" />
-                    ) : (
-                        <span className="text-xs text-gray-500">No Preview</span>
-                    )}
-                </div>
-                <div className="flex-grow font-semibold text-gray-200">
-                    Iteration {index + 1}
-                </div>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(item.code, index);
-                    }}
-                    className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    aria-label={`Download Iteration ${index + 1}`}
-                    title={`Download Iteration ${index + 1}`}
+            <div key={index} className="space-y-2">
+                <div
+                    onClick={() => onSelect(index)}
+                    className={`w-full text-left p-2 rounded-md flex items-center gap-4 transition-colors cursor-pointer ${selectedIndex === index ? 'bg-cyan-800/70 ring-2 ring-cyan-400' : 'bg-gray-800 hover:bg-gray-700'}`}
                 >
-                    <DownloadIcon />
-                </button>
+                    <div className="w-24 h-16 bg-black flex-shrink-0 rounded-md border border-gray-600 flex items-center justify-center">
+                        {item.screenshot ? (
+                            <img src={`data:image/jpeg;base64,${item.screenshot}`} alt={`Iteration ${index + 1} screenshot`} className="w-full h-full object-cover rounded-md" />
+                        ) : (
+                            <span className="text-xs text-gray-500">No Preview</span>
+                        )}
+                    </div>
+                    <div className="flex-grow font-semibold text-gray-200">
+                        Iteration {index + 1}
+                    </div>
+                    {item.compressedScreenshot && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowCompressedPreview(showCompressedPreview === index ? null : index);
+                            }}
+                            className="px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 rounded text-white"
+                            title="View AI Screenshot"
+                        >
+                            AI View
+                        </button>
+                    )}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(item.code, index);
+                        }}
+                        className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        aria-label={`Download Iteration ${index + 1}`}
+                        title={`Download Iteration ${index + 1}`}
+                    >
+                        <DownloadIcon />
+                    </button>
+                </div>
+                {showCompressedPreview === index && item.compressedScreenshot && (
+                    <div className="ml-2 p-2 bg-gray-900 rounded border border-purple-500">
+                        <p className="text-xs text-purple-300 mb-1">AI Compressed Screenshot:</p>
+                        <img 
+                            src={`data:image/jpeg;base64,${item.compressedScreenshot}`} 
+                            alt="Compressed screenshot for AI" 
+                            className="w-full rounded border border-purple-700"
+                        />
+                    </div>
+                )}
             </div>
         ))}
         {history.length === 0 && (
