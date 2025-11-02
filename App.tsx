@@ -303,6 +303,20 @@ const App: React.FC = () => {
     setActiveTab('iterations');
   }, [iterationHistory]);
 
+  const handleBranchFromIteration = useCallback((index: number) => {
+    if (!isRunning) {
+      const selectedIteration = iterationHistory[index];
+      // Keep only iterations up to and including the selected one
+      const newHistory = iterationHistory.slice(0, index + 1);
+      setIterationHistory(newHistory);
+      iterationHistoryRef.current = newHistory;
+      setDisplayedCode(selectedIteration.code);
+      setSelectedIteration(index);
+      setActiveTab('iterations');
+      log(`Branched from iteration ${index + 1}. Ready to continue evolution from here.`);
+    }
+  }, [iterationHistory, isRunning, log]);
+
   const parseImprovementResponse = (responseText: string): { thought: string, analysis: string, plan: string, code: string } | null => {
     try {
         const cleanedText = responseText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
@@ -520,7 +534,7 @@ const App: React.FC = () => {
           </div>
           <div className="p-4 overflow-y-auto flex-grow min-h-0">
             {activeTab === 'log' && <StatusLog history={logHistory} />}
-            {activeTab === 'iterations' && <IterationHistory history={iterationHistory} onSelect={handleSelectIteration} selectedIndex={selectedIteration} />}
+            {activeTab === 'iterations' && <IterationHistory history={iterationHistory} onSelect={handleSelectIteration} selectedIndex={selectedIteration} onBranch={handleBranchFromIteration} />}
             {activeTab === 'dev_notes' && <DeveloperNotesLog notes={developerNotes} />}
             {activeTab === 'usage' && <UsageStats history={usageHistory} />}
           </div>

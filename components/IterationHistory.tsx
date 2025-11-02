@@ -10,6 +10,7 @@ interface IterationHistoryProps {
   history: Iteration[];
   onSelect: (index: number) => void;
   selectedIndex: number | null;
+  onBranch?: (index: number) => void;
 }
 
 const DownloadIcon = () => (
@@ -19,7 +20,13 @@ const DownloadIcon = () => (
 );
 
 
-export const IterationHistory: React.FC<IterationHistoryProps> = ({ history, onSelect, selectedIndex }) => {
+const BranchIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+    </svg>
+);
+
+export const IterationHistory: React.FC<IterationHistoryProps> = ({ history, onSelect, selectedIndex, onBranch }) => {
   const [showCompressedPreview, setShowCompressedPreview] = React.useState<number | null>(null);
   
   const handleDownload = (code: string, index: number) => {
@@ -62,6 +69,19 @@ export const IterationHistory: React.FC<IterationHistoryProps> = ({ history, onS
                             title="View AI Screenshot"
                         >
                             AI View
+                        </button>
+                    )}
+                    {onBranch && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onBranch(index);
+                            }}
+                            className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            aria-label={`Branch from Iteration ${index + 1}`}
+                            title={`Branch from Iteration ${index + 1}`}
+                        >
+                            <BranchIcon />
                         </button>
                     )}
                     <button
