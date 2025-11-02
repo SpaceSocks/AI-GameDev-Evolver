@@ -7,11 +7,13 @@ import { GameDisplay } from './components/GameDisplay';
 import { IterationHistory } from './components/IterationHistory';
 import { UserFeedback } from './components/UserFeedback';
 import { TabButton } from './components/ui/TabButton';
-import { Status } from './types';
-import { generateInitialGame, improveGame, summarizeHistory } from './services/geminiService';
+import { Status, UsageStat, LlmConfig, LlmProvider } from './types';
+import { generateInitialGame, improveGame, summarizeHistory } from './services/llmService';
 import { GameTypeSelector, GameType } from './components/GameTypeSelector';
 import { TimingStats } from './components/TimingStats';
 import { DeveloperNotesLog } from './components/DeveloperNotesLog';
+import { ApiConfig } from './components/ApiConfig';
+import { UsageStats } from './components/UsageStats';
 
 interface Iteration {
     code: string;
@@ -26,6 +28,13 @@ const SCREENSHOT_DURATION_MS = 15000;
 const App: React.FC = () => {
     const [gameConcept, setGameConcept] = useState('');
     const [gameType, setGameType] = useState<GameType>('simulation');
+    
+    // LLM Configuration State
+    const [llmProvider, setLlmProvider] = useState<LlmProvider>('gemini');
+    const [apiKey, setApiKey] = useState('');
+    const [baseUrl, setBaseUrl] = useState('');
+    const [modelName, setModelName] = useState('gemini-2.5-pro');
+
     const [status, setStatus] = useState<Status>(Status.Idle);
     const [statusHistory, setStatusHistory] = useState<string[]>([]);
     const [gameCode, setGameCode] = useState<string | null>(null);
@@ -34,7 +43,8 @@ const App: React.FC = () => {
     const [pastPlans, setPastPlans] = useState<string[]>([]);
     const [longTermMemory, setLongTermMemory] = useState<string[]>([]);
     const [developerNotesHistory, setDeveloperNotesHistory] = useState<string[]>([]);
-    const [currentTab, setCurrentTab] = useState<'log' | 'history' | 'notes'>('log');
+    const [usageHistory, setUsageHistory] = useState<UsageStat[]>([]);
+    const [currentTab, setCurrentTab] = useState<'log' | 'history' | 'notes' | 'usage'>('log');
     const [timingStats, setTimingStats] = useState<{
         startTime: number | null;
         iterationTimes: number[];
@@ -55,11 +65,13 @@ const App: React.FC = () => {
 
     const isRunning = status === Status.Generating || status === Status.Improving;
 
+    const llmConfig: LlmConfig = { provider: llmProvider, apiKey, baseUrl, modelName };
+
     useEffect(() => {
         if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
         }
-    }, [statusHistory, currentTab, developerNotesHistory]);
+    }, [statusHistory, currentTab, developerNotesHistory, usageHistory]);
     
     useEffect(() => {
         let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -121,21 +133,30 @@ const App: React.FC = () => {
         return screenshots;
     }, [takeScreenshot, addToLog]);
 
-    const runImprovementLoop = useCallback(async (initialCode: string, concept: string, type: GameType) => {
+    const runImprovementLoop = useCallback(async (initialCode: string, concept: string, type: GameType, config: LlmConfig) => {
         let currentCode = initialCode;
-        iterationCounterRef.current = 1;
 
         while (!stopRequestedRef.current) {
+            iterationCounterRef.current++;
             const iterationStartTime = Date.now();
             try {
                 setStatus(Status.Improving);
                 addToLog(`\n--- Starting Iteration ${iterationCounterRef.current} ---`);
                 
-                if (iterationCounterRef.current > 1 && (iterationCounterRef.current -1) % MEMORY_SUMMARY_INTERVAL === 0) {
+                if (iterationCounterRef.current > 1 && (iterationCounterRef.current - 1) % MEMORY_SUMMARY_INTERVAL === 0) {
                     addToLog("AI is consolidating long-term memory...");
                     const plansToSummarize = pastPlans.slice(-MEMORY_SUMMARY_INTERVAL);
-                    const summary = await summarizeHistory(plansToSummarize);
+                    const summaryConfig = {...config, modelName: config.provider === 'gemini' ? 'gemini-2.5-flash' : config.modelName}; // Use a faster model for summary
+                    const { summary, inputChars } = await summarizeHistory(plansToSummarize, summaryConfig);
                     setLongTermMemory(prev => [...prev, summary]);
+                    setUsageHistory(prev => [...prev, {
+                        iteration: iterationCounterRef.current,
+                        task: 'Summarize Memory',
+                        provider: summaryConfig.provider,
+                        model: summaryConfig.modelName,
+                        inputChars,
+                        outputChars: summary.length
+                    }]);
                     addToLog(`[Memory] New summary created: "${summary}"`);
                 }
 
@@ -153,7 +174,17 @@ const App: React.FC = () => {
                 const shortTermPlans = pastPlans.slice(-SHORT_TERM_MEMORY_LIMIT);
                 
                 addToLog("> AI is now thinking...");
-                const result = await improveGame(currentCode, concept, type, allDeveloperNotes, longTermMemory, shortTermPlans, screenshots.length > 0 ? screenshots : undefined);
+                const { result, inputChars } = await improveGame(currentCode, concept, type, allDeveloperNotes, longTermMemory, shortTermPlans, config, screenshots.length > 0 ? screenshots : undefined);
+                const outputChars = JSON.stringify(result).length;
+                
+                setUsageHistory(prev => [...prev, {
+                    iteration: iterationCounterRef.current,
+                    task: 'Improve Code',
+                    provider: config.provider,
+                    model: config.modelName,
+                    inputChars,
+                    outputChars
+                }]);
 
                 if (stopRequestedRef.current) break;
                 
@@ -175,13 +206,11 @@ const App: React.FC = () => {
                 const newScreenshot = await takeScreenshot();
 
                 setIterationHistory(prev => [...prev, { code: result.newCode, screenshot: newScreenshot }]);
-                setSelectedIterationIndex(prev => (prev ?? 0) + 1);
-
-                iterationCounterRef.current++;
+                setSelectedIterationIndex(prev => (prev ?? -1) + 1);
 
             } catch (e: any) {
                 console.error(e);
-                addToLog(`Error during improvement loop: ${e.message}`);
+                addToLog(`Error during improvement loop: ${e.toString()}`);
                 setStatus(Status.Error);
                 break;
             } finally {
@@ -210,6 +239,7 @@ const App: React.FC = () => {
         isGameLoadedRef.current = false;
         feedbackRef.current = '';
         developerNotesHistoryRef.current = [];
+        iterationCounterRef.current = 0;
         setStatus(Status.Generating);
         setStatusHistory([]);
         setIterationHistory([]);
@@ -217,6 +247,7 @@ const App: React.FC = () => {
         setPastPlans([]);
         setLongTermMemory([]);
         setDeveloperNotesHistory([]);
+        setUsageHistory([]);
         setSelectedIterationIndex(null);
         setCurrentTab('log');
         setTimingStats({
@@ -227,7 +258,18 @@ const App: React.FC = () => {
 
         try {
             addToLog("Generating initial game version...");
-            const initialCode = await generateInitialGame(gameConcept, gameType);
+            iterationCounterRef.current = 1;
+            const { code: initialCode, inputChars } = await generateInitialGame(gameConcept, gameType, llmConfig);
+            
+            setUsageHistory([{
+                iteration: 1,
+                task: 'Initial Generation',
+                provider: llmConfig.provider,
+                model: llmConfig.modelName,
+                inputChars,
+                outputChars: initialCode.length,
+            }]);
+
             if (stopRequestedRef.current) return;
 
             addToLog("Initial game generated. Loading...");
@@ -250,14 +292,14 @@ const App: React.FC = () => {
             setIterationHistory([{ code: initialCode, screenshot }]);
             setSelectedIterationIndex(0);
 
-            runImprovementLoop(initialCode, gameConcept, gameType);
+            runImprovementLoop(initialCode, gameConcept, gameType, llmConfig);
 
         } catch (e: any) {
             console.error(e);
-            addToLog(`Error generating initial game: ${e.message}`);
+            addToLog(`Error generating initial game: ${e.toString()}`);
             setStatus(Status.Error);
         }
-    }, [gameConcept, gameType, addToLog, runImprovementLoop, takeScreenshot]);
+    }, [gameConcept, gameType, llmConfig, addToLog, runImprovementLoop, takeScreenshot]);
 
     const handleStop = useCallback(() => {
         stopRequestedRef.current = true;
@@ -282,6 +324,44 @@ const App: React.FC = () => {
         addToLog(`[Feedback] Note added to checklist: "${trimmedFeedback}"`);
     }, [addToLog]);
     
+    const renderTabContent = () => {
+        switch (currentTab) {
+            case 'log':
+                return (
+                    <>
+                        <h3 className="text-lg font-semibold text-gray-300 mb-2">Evolution Log</h3>
+                        <StatusLog history={statusHistory} />
+                    </>
+                );
+            case 'history':
+                return (
+                    <>
+                         <h3 className="text-lg font-semibold text-gray-300 mb-2">Review Iterations</h3>
+                        <IterationHistory 
+                            history={iterationHistory} 
+                            onSelect={handleSelectIteration}
+                            selectedIndex={selectedIterationIndex}
+                        />
+                    </>
+                );
+            case 'notes':
+                 return (
+                    <>
+                        <h3 className="text-lg font-semibold text-gray-300 mb-2">All Developer Notes</h3>
+                        <DeveloperNotesLog notes={developerNotesHistory} />
+                    </>
+                 );
+            case 'usage':
+                return (
+                    <>
+                        <h3 className="text-lg font-semibold text-gray-300 mb-2">API Usage Stats</h3>
+                        <UsageStats history={usageHistory} />
+                    </>
+                )
+            default:
+                return null;
+        }
+    };
 
     return (
         <div className="bg-gray-900 text-gray-200 min-h-screen flex flex-col font-sans">
@@ -291,10 +371,23 @@ const App: React.FC = () => {
                 <div className="flex flex-col gap-4 bg-gray-800/50 p-4 rounded-lg border border-gray-700">
                     <UserInput value={gameConcept} onChange={setGameConcept} disabled={isRunning} />
                     <GameTypeSelector value={gameType} onChange={setGameType} disabled={isRunning} />
+                    <ApiConfig 
+                        provider={llmProvider}
+                        setProvider={setLlmProvider}
+                        apiKey={apiKey}
+                        setApiKey={setApiKey}
+                        baseUrl={baseUrl}
+                        setBaseUrl={setBaseUrl}
+                        modelName={modelName}
+                        setModelName={setModelName}
+                        disabled={isRunning}
+                    />
                     <UserFeedback onSend={handleSendFeedback} disabled={!isRunning} />
                     <TimingStats 
                         totalElapsed={timingStats.totalElapsed} 
                         iterationTimes={timingStats.iterationTimes}
+                        currentIteration={iterationCounterRef.current}
+                        status={status}
                     />
                     <Controls onStart={handleStart} onStop={handleStop} status={status} hasHistory={iterationHistory.length > 0} />
                 </div>
@@ -316,19 +409,12 @@ const App: React.FC = () => {
                             <TabButton label="Evolution Log" isActive={currentTab === 'log'} onClick={() => setCurrentTab('log')} />
                             <TabButton label="Review Iterations" isActive={currentTab === 'history'} onClick={() => setCurrentTab('history')} />
                             <TabButton label="Developer Notes" isActive={currentTab === 'notes'} onClick={() => setCurrentTab('notes')} />
+                            <TabButton label="Usage Stats" isActive={currentTab === 'usage'} onClick={() => setCurrentTab('usage')} />
                         </div>
                     </div>
                     <div className="flex-grow relative">
                         <div ref={scrollContainerRef} className="absolute inset-0 p-4 overflow-y-auto">
-                            {currentTab === 'log' && <StatusLog history={statusHistory} />}
-                            {currentTab === 'history' && (
-                                <IterationHistory 
-                                    history={iterationHistory} 
-                                    onSelect={handleSelectIteration}
-                                    selectedIndex={selectedIterationIndex}
-                                />
-                            )}
-                             {currentTab === 'notes' && <DeveloperNotesLog notes={developerNotesHistory} />}
+                           {renderTabContent()}
                         </div>
                     </div>
                 </div>

@@ -49,7 +49,23 @@ const callOpenAICompatible = async (config: LlmConfig, body: object): Promise<an
             throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
         }
         return await response.json();
-    } catch(error) {
+    } catch(error: any) {
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            let detailedMessage = "Network request failed. This is often caused by one of two issues when connecting to a local server (like LM Studio or Ollama):\n\n";
+
+            // Check for Mixed Content issue
+            if (window.location.protocol === 'https:' && config.baseUrl.startsWith('http://')) {
+                 detailedMessage += "1. **Mixed Content Error (Most Likely):**\n" +
+                                    "Your browser is blocking this secure (https://) page from connecting to your insecure (http://) local server. \n" +
+                                    "**SOLUTION:** Access this application from an `http://` address, not `https://`.\n\n";
+            }
+
+            detailedMessage += "2. **CORS (Cross-Origin Resource Sharing) Error:**\n" +
+                               "Your local server might not be configured to accept requests from this web page.\n" +
+                               "**SOLUTION:** In LM Studio, go to the Server tab and ensure the 'CORS' setting is enabled.";
+
+             throw new LlmError(detailedMessage, config.provider, config.modelName, error);
+        }
         throw new LlmError("Failed to fetch from OpenAI-compatible API.", config.provider, config.modelName, error);
     }
 };

@@ -50,13 +50,10 @@ const Message: React.FC<{ message: string }> = React.memo(({ message }) => {
 
 export const StatusLog: React.FC<StatusLogProps> = ({ history }) => {
   return (
-    <div>
-        <h3 className="text-lg font-semibold text-gray-300 mb-2">Evolution Log</h3>
-        <div className="text-sm font-mono">
-            {history.map((message, index) => (
-                <Message key={index} message={message} />
-            ))}
-        </div>
+    <div className="text-sm font-mono">
+        {history.map((message, index) => (
+            <Message key={index} message={message} />
+        ))}
     </div>
   );
 };

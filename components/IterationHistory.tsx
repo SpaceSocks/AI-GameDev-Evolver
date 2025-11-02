@@ -33,44 +33,41 @@ export const IterationHistory: React.FC<IterationHistoryProps> = ({ history, onS
   };
 
   return (
-    <div>
-        <h3 className="text-lg font-semibold text-gray-300 mb-2">Review Iterations</h3>
-        <div className="space-y-2">
-            {history.map((item, index) => (
-                <div
-                    key={index}
-                    onClick={() => onSelect(index)}
-                    className={`w-full text-left p-2 rounded-md flex items-center gap-4 transition-colors cursor-pointer ${selectedIndex === index ? 'bg-cyan-800/70 ring-2 ring-cyan-400' : 'bg-gray-800 hover:bg-gray-700'}`}
+    <div className="space-y-2">
+        {history.map((item, index) => (
+            <div
+                key={index}
+                onClick={() => onSelect(index)}
+                className={`w-full text-left p-2 rounded-md flex items-center gap-4 transition-colors cursor-pointer ${selectedIndex === index ? 'bg-cyan-800/70 ring-2 ring-cyan-400' : 'bg-gray-800 hover:bg-gray-700'}`}
+            >
+                <div className="w-24 h-16 bg-black flex-shrink-0 rounded-md border border-gray-600 flex items-center justify-center">
+                    {item.screenshot ? (
+                        <img src={`data:image/jpeg;base64,${item.screenshot}`} alt={`Iteration ${index + 1} screenshot`} className="w-full h-full object-cover rounded-md" />
+                    ) : (
+                        <span className="text-xs text-gray-500">No Preview</span>
+                    )}
+                </div>
+                <div className="flex-grow font-semibold text-gray-200">
+                    Iteration {index + 1}
+                </div>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(item.code, index);
+                    }}
+                    className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    aria-label={`Download Iteration ${index + 1}`}
+                    title={`Download Iteration ${index + 1}`}
                 >
-                    <div className="w-24 h-16 bg-black flex-shrink-0 rounded-md border border-gray-600 flex items-center justify-center">
-                        {item.screenshot ? (
-                            <img src={`data:image/jpeg;base64,${item.screenshot}`} alt={`Iteration ${index + 1} screenshot`} className="w-full h-full object-cover rounded-md" />
-                        ) : (
-                            <span className="text-xs text-gray-500">No Preview</span>
-                        )}
-                    </div>
-                    <div className="flex-grow font-semibold text-gray-200">
-                        Iteration {index + 1}
-                    </div>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownload(item.code, index);
-                        }}
-                        className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                        aria-label={`Download Iteration ${index + 1}`}
-                        title={`Download Iteration ${index + 1}`}
-                    >
-                        <DownloadIcon />
-                    </button>
-                </div>
-            ))}
-            {history.length === 0 && (
-                <div className="text-center text-gray-500 p-4">
-                    No history to display.
-                </div>
-            )}
-        </div>
+                    <DownloadIcon />
+                </button>
+            </div>
+        ))}
+        {history.length === 0 && (
+            <div className="text-center text-gray-500 p-4">
+                No history to display.
+            </div>
+        )}
     </div>
   );
 };
