@@ -477,9 +477,9 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="bg-gray-900 text-gray-200 min-h-screen flex flex-col font-sans">
+    <div className="bg-gray-900 text-gray-200 h-screen flex flex-col font-sans overflow-hidden">
       <Header />
-      <main className="flex-grow grid lg:grid-cols-4 gap-3 p-3 overflow-hidden min-h-0">
+      <main className="flex-1 grid lg:grid-cols-4 gap-3 p-3 overflow-hidden min-h-0">
         {/* Left Panel */}
         <div className="lg:col-span-1 flex flex-col gap-2 overflow-y-auto min-h-0 h-full pr-2">
           <div className="bg-black/30 backdrop-blur-sm border border-gray-700 rounded-lg p-3 space-y-3">
