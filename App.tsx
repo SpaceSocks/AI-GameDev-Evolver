@@ -481,7 +481,7 @@ const App: React.FC = () => {
       <Header />
       <main className="flex-grow grid lg:grid-cols-4 gap-3 p-3 overflow-hidden min-h-0">
         {/* Left Panel */}
-        <div className="lg:col-span-1 flex flex-col gap-2 overflow-y-auto min-h-0 pr-2">
+        <div className="lg:col-span-1 flex flex-col gap-2 overflow-y-auto min-h-0 h-full pr-2">
           <div className="bg-black/30 backdrop-blur-sm border border-gray-700 rounded-lg p-3 space-y-3">
             <UserInput value={gameDescription} onChange={setGameDescription} onGenerateRandom={handleGenerateRandomIdea} disabled={isRunning} />
             <GameTypeSelector value={gameType} onChange={setGameType} disabled={isRunning} />
@@ -516,7 +516,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Center Panel */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
+        <div className="lg:col-span-2 flex flex-col min-h-0 h-full">
           <GameDisplay 
             ref={gameDisplayRef} 
             htmlContent={displayedCode || null} 
@@ -527,7 +527,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Right Panel */}
-        <div className="lg:col-span-1 flex flex-col bg-black/30 backdrop-blur-sm border border-gray-700 rounded-lg overflow-hidden min-h-0">
+        <div className="lg:col-span-1 flex flex-col bg-black/30 backdrop-blur-sm border border-gray-700 rounded-lg overflow-hidden min-h-0 h-full">
           <div className="flex border-b border-gray-700 bg-gray-900/50 flex-shrink-0">
             <TabButton label="Evolution Log" isActive={activeTab === 'log'} onClick={() => setActiveTab('log')} />
             <TabButton label="Review Iterations" isActive={activeTab === 'iterations'} onClick={() => setActiveTab('iterations')} />
