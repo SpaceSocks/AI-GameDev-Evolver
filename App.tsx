@@ -337,6 +337,7 @@ const App: React.FC = () => {
     currentIterationRef.current = 1;
     setSelectedIteration(null);
     setActiveTab('log');
+    setDisplayedCode(null); // Clear the previous game preview
     
     log('Starting new evolution...');
     setStatus(Status.Generating);
