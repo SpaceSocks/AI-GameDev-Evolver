@@ -22,6 +22,8 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
     if (newProvider === 'gemini') {
         setModelName('gemini-2.5-pro');
         setBaseUrl('');
+        // Fix: Per guidelines, Gemini API key comes from env, so clear it from state
+        setApiKey('');
     } else {
         setModelName('gpt-4o');
     }
@@ -62,13 +64,13 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
             />
         </div>
     )}
-      {/* FIX: Hide API Key input for Gemini provider per guidelines. */}
+      {/* Fix: Hide API key field for Gemini, as it uses environment variables */}
       {provider !== 'gemini' && (
         <div>
-            <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300 mb-1">
+          <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300 mb-1">
             API Key
-            </label>
-            <input
+          </label>
+          <input
             type="password"
             id="apiKey"
             className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
@@ -76,7 +78,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             disabled={disabled}
-            />
+          />
         </div>
       )}
       <div>

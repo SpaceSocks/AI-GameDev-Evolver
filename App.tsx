@@ -1,74 +1,60 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-
 import { Header } from './components/Header';
 import { UserInput } from './components/UserInput';
-import { GameTypeSelector, GameType } from './components/GameTypeSelector';
 import { Controls } from './components/Controls';
-import { GameDisplay, GameDisplayRef } from './components/GameDisplay';
 import { StatusLog } from './components/StatusLog';
+import { GameDisplay, GameDisplayRef } from './components/GameDisplay';
 import { IterationHistory } from './components/IterationHistory';
 import { UserFeedback } from './components/UserFeedback';
 import { ApiConfig } from './components/ApiConfig';
 import { TabButton } from './components/ui/TabButton';
 import { Status, LlmConfig, UsageStat } from './types';
 import * as llmService from './services/llmService';
-import { DeveloperNotesLog } from './components/DeveloperNotesLog';
+import { GameType, GameTypeSelector } from './components/GameTypeSelector';
 import { TimingStats } from './components/TimingStats';
+import { DeveloperNotesLog } from './components/DeveloperNotesLog';
 import { UsageStats } from './components/UsageStats';
 
-
-type LeftPanelTab = 'history' | 'notes';
-type RightPanelTab = 'log' | 'config' | 'stats';
-
-interface Iteration {
-    code: string;
-    screenshot?: string;
-}
+type ActiveTab = 'status' | 'history' | 'notes' | 'usage';
 
 const App: React.FC = () => {
-    // Main State
-    const [status, setStatus] = useState<Status>(Status.Idle);
-    const [gameConcept, setGameConcept] = useState<string>('');
+    // State
+    const [gameConcept, setGameConcept] = useState('');
     const [gameType, setGameType] = useState<GameType>('interactive');
-    const [iterations, setIterations] = useState<Iteration[]>([]);
-    const [selectedIteration, setSelectedIteration] = useState<number | null>(null);
+    const [status, setStatus] = useState<Status>(Status.Idle);
     const [statusHistory, setStatusHistory] = useState<string[]>([]);
     const [developerNotes, setDeveloperNotes] = useState<string[]>([]);
-    const [isGeneratingIdea, setIsGeneratingIdea] = useState(false);
-
-    // UI State
-    const [leftTab, setLeftTab] = useState<LeftPanelTab>('history');
-    const [rightTab, setRightTab] = useState<RightPanelTab>('log');
-    
-    // LLM Config
+    const [currentHtml, setCurrentHtml] = useState<string | null>(null);
+    const [iterationHistory, setIterationHistory] = useState<{ code: string; screenshot?: string }[]>([]);
+    const [selectedIterationIndex, setSelectedIterationIndex] = useState<number | null>(null);
+    const [activeTab, setActiveTab] = useState<ActiveTab>('status');
     const [llmConfig, setLlmConfig] = useState<LlmConfig>({
         provider: 'gemini',
-        apiKey: '',
+        apiKey: '', // API key for OpenAI, Gemini uses env
         baseUrl: '',
-        modelName: 'gemini-2.5-pro'
+        modelName: 'gemini-2.5-pro',
     });
-
-    // Stats
-    const [usageHistory, setUsageHistory] = useState<UsageStat[]>([]);
-    const [totalElapsedTime, setTotalElapsedTime] = useState(0);
+    const [totalElapsed, setTotalElapsed] = useState(0);
     const [iterationTimes, setIterationTimes] = useState<number[]>([]);
-    
+    const [currentIterationNum, setCurrentIterationNum] = useState(0);
+    const [usageHistory, setUsageHistory] = useState<UsageStat[]>([]);
+
     // Refs
+    const stopRequestedRef = useRef(false);
     const gameDisplayRef = useRef<GameDisplayRef>(null);
-    const stopEvolvingRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-    
-    const addStatus = useCallback((message: string) => {
-        console.log(message);
-        setStatusHistory(prev => [...prev, message]);
-    }, []);
-    
-    // Timer Effect
+    const iterationStartTimeRef = useRef<number>(0);
+    const totalStartTimeRef = useRef<number>(0);
+    const memoryRef = useRef<string | null>(null);
+
+    const isRunning = status === Status.Generating || status === Status.Improving;
+
+    // Timer effect
     useEffect(() => {
-        if (status === Status.Generating || status === Status.Improving) {
-            const startTime = Date.now();
+        if (isRunning) {
+            totalStartTimeRef.current = Date.now() - totalElapsed;
             timerRef.current = setInterval(() => {
-                setTotalElapsedTime(prev => prev + (Date.now() - (startTime + prev)));
+                setTotalElapsed(Date.now() - totalStartTimeRef.current);
             }, 1000);
         } else {
             if (timerRef.current) {
@@ -79,249 +65,204 @@ const App: React.FC = () => {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [status]);
+    }, [isRunning, totalElapsed]);
 
+    // Log helper
+    const addToLog = useCallback((message: string) => {
+        console.log(message);
+        setStatusHistory(prev => [message, ...prev]);
+    }, []);
 
-    const handleGenerateRandomIdea = async () => {
-        setIsGeneratingIdea(true);
-        addStatus("Generating a random game idea...");
-        try {
-            const result = await llmService.generateRandomIdea(llmConfig, gameType);
-            setGameConcept(result.idea);
-            addStatus(`Generated idea: "${result.idea}"`);
-        } catch (e: any) {
-            addStatus(`Error: Failed to generate idea. ${e.message}`);
-        } finally {
-            setIsGeneratingIdea(false);
-        }
+    // Usage helper
+    const addUsageStat = useCallback((task: string, inputChars: number, outputChars: number) => {
+        setUsageHistory(prev => [...prev, {
+            iteration: currentIterationNum,
+            task,
+            provider: llmConfig.provider,
+            model: llmConfig.modelName,
+            inputChars,
+            outputChars,
+        }]);
+    }, [currentIterationNum, llmConfig]);
+
+    const handleStop = () => {
+        if (!isRunning) return;
+        stopRequestedRef.current = true;
+        addToLog('Stop request received. Finishing current task...');
+        setStatus(Status.Stopped);
+    };
+    
+    const handleAddNote = (note: string) => {
+        setDeveloperNotes(prev => [...prev, note]);
+        addToLog(`Developer Note added: "${note}"`);
+    };
+    
+    const handleSelectIteration = (index: number) => {
+        setSelectedIterationIndex(index);
+        setCurrentHtml(iterationHistory[index].code);
+        addToLog(`Viewing iteration ${index + 1}.`);
     };
 
-    const runImprovementCycle = async () => {
-        if (stopEvolvingRef.current) {
-            addStatus("Evolution stopped by user.");
-            setStatus(Status.Stopped);
-            stopEvolvingRef.current = false;
-            return;
-        }
-
-        if (developerNotes.length === 0) {
-            addStatus("Stopping: No more developer notes to process.");
-            setStatus(Status.Idle);
-            return;
-        }
-
-        setStatus(Status.Improving);
-        const currentIterationIndex = iterations.length - 1;
-        const currentIteration = iterations[currentIterationIndex];
-        const noteToProcess = developerNotes[0];
-        const noteHistory = developerNotes.slice(1);
+    const captureAndContinue = async (code: string): Promise<void> => {
+        setCurrentHtml(code);
         
-        addStatus(`Starting iteration ${iterations.length + 1} with note: "${noteToProcess}"`);
-
-        const iterationStartTime = Date.now();
-        
-        try {
-            const screenshot = await gameDisplayRef.current?.captureScreenshot();
-            if (!screenshot) {
-                throw new Error("Could not capture screenshot.");
-            }
-            
-            // Update screenshot of the previous iteration
-            setIterations(prev => {
-                const newIterations = [...prev];
-                if (newIterations[currentIterationIndex]) {
-                   newIterations[currentIterationIndex].screenshot = screenshot;
+        return new Promise((resolve, reject) => {
+             // A short delay to allow iframe to start loading srcdoc
+             setTimeout(async () => {
+                try {
+                    const screenshot = await gameDisplayRef.current?.captureScreenshot();
+                    if (!screenshot) throw new Error("Failed to capture screenshot");
+                    
+                    setIterationHistory(prev => [...prev, { code, screenshot }]);
+                    setSelectedIterationIndex(prev => (prev ?? -1) + 1);
+                    resolve();
+                } catch (error) {
+                    addToLog(`Warning: Could not capture screenshot. Continuing without it. ${error instanceof Error ? error.message : ''}`);
+                    setIterationHistory(prev => [...prev, { code, screenshot: undefined }]);
+                    setSelectedIterationIndex(prev => (prev ?? -1) + 1);
+                    resolve(); // Resolve anyway
                 }
-                return newIterations;
-            });
-
-            const result = await llmService.improveCode(
-                llmConfig,
-                currentIteration.code,
-                screenshot,
-                gameConcept,
-                noteHistory,
-                noteToProcess
-            );
-
-            if(result.analysis) addStatus(`[Analysis] ${result.analysis}`);
-            if(result.thought) addStatus(`[Thought] ${result.thought}`);
-            if(result.plan) addStatus(`[Plan]\n${result.plan}`);
-            
-            const newIteration = { code: result.code };
-            setIterations(prev => [...prev, newIteration]);
-            setSelectedIteration(iterations.length);
-            setDeveloperNotes(prev => prev.slice(1)); // Consume the note
-
-            setUsageHistory(prev => [...prev, {
-                iteration: iterations.length + 1,
-                task: 'improve',
-                provider: llmConfig.provider,
-                model: llmConfig.modelName,
-                inputChars: result.inputChars,
-                outputChars: result.outputChars,
-            }]);
-
-            const iterationDuration = Date.now() - iterationStartTime;
-            setIterationTimes(prev => [...prev, iterationDuration]);
-            
-            // Schedule next cycle
-            setTimeout(runImprovementCycle, 1000);
-
-        } catch (e: any) {
-            addStatus(`Error during improvement cycle: ${e.message}`);
-            setStatus(Status.Error);
-        }
+            }, 500);
+        });
     };
 
     const handleStart = async () => {
-        if (!gameConcept.trim()) {
-            addStatus("Error: Please enter a game concept.");
+        if (isRunning || !gameConcept.trim()) {
+            addToLog('Error: Game concept cannot be empty.');
             return;
         }
-        if (developerNotes.length === 0) {
-            addStatus("Warning: No developer notes added. Add a note to guide the first improvement.");
-        }
-        
-        setStatus(Status.Generating);
-        addStatus("Starting evolution...");
-        addStatus(`Generating initial code for: "${gameConcept}"`);
-        stopEvolvingRef.current = false;
-        setIterations([]);
+
+        // Reset state
+        stopRequestedRef.current = false;
+        setStatusHistory([]);
+        setIterationHistory([]);
+        setDeveloperNotes([]);
+        setCurrentHtml(null);
+        setSelectedIterationIndex(null);
+        setCurrentIterationNum(0);
+        setTotalElapsed(0);
         setIterationTimes([]);
-        setTotalElapsedTime(0);
-        setSelectedIteration(null);
+        setUsageHistory([]);
+        memoryRef.current = null;
+        
+        addToLog(`Starting evolution for: "${gameConcept}"`);
+        setStatus(Status.Generating);
+        setCurrentIterationNum(1);
+        
+        let currentCode = '';
 
         try {
-            const result = await llmService.generateInitialCode(llmConfig, gameConcept, gameType);
+            // Step 1: Generate Initial Code
+            iterationStartTimeRef.current = Date.now();
+            addToLog('[1] Generating initial game code...');
+            const initialCode = await llmService.generateInitialCode(llmConfig, gameConcept, gameType);
+            addUsageStat('generate', gameConcept.length, initialCode.length);
+            currentCode = initialCode;
 
-            if(result.thought) addStatus(`[Thought] ${result.thought}`);
-            if(result.plan) addStatus(`[Plan]\n${result.plan}`);
-            addStatus("Initial code generated successfully.");
-
-            const initialIteration = { code: result.code };
-            setIterations([initialIteration]);
-            setSelectedIteration(0);
+            await captureAndContinue(currentCode);
+            setIterationTimes(prev => [...prev, Date.now() - iterationStartTimeRef.current]);
             
-            setUsageHistory(prev => [...prev, {
-                iteration: 1,
-                task: 'initial',
-                provider: llmConfig.provider,
-                model: llmConfig.modelName,
-                inputChars: result.inputChars,
-                outputChars: result.outputChars,
-            }]);
-            
-            // Start the improvement loop after a short delay
-            setTimeout(runImprovementCycle, 1000);
+            // Step 2: Improvement Loop
+            for (let i = 2; i < 100; i++) { // Max 99 improvement iterations
+                if (stopRequestedRef.current) {
+                    addToLog('Evolution stopped by user.');
+                    setStatus(Status.Stopped);
+                    return;
+                }
+                
+                setStatus(Status.Improving);
+                setCurrentIterationNum(i);
+                iterationStartTimeRef.current = Date.now();
+                addToLog(`\n[${i}] Starting improvement cycle...`);
 
-        } catch (e: any) {
-            addStatus(`Error: Failed to generate initial code. ${e.message}`);
+                const lastScreenshot = iterationHistory[iterationHistory.length - 1]?.screenshot;
+                if (!lastScreenshot) {
+                    addToLog('Warning: No screenshot available for analysis. Relying on code only.');
+                }
+                
+                const newNote = developerNotes.shift(); // Use the oldest note first
+                if (newNote) {
+                    addToLog(`Addressing note: "${newNote}"`);
+                } else {
+                    addToLog('No new developer notes. Performing autonomous improvement.');
+                }
+
+                const response = await llmService.improveCode(llmConfig, currentCode, lastScreenshot ?? '', gameConcept, developerNotes, newNote);
+                
+                addUsageStat('improve', currentCode.length + (lastScreenshot?.length ?? 0), response.code.length);
+                
+                if (response.analysis) addToLog(`[Analysis] ${response.analysis}`);
+                if (response.thought) addToLog(`[Thought] ${response.thought}`);
+                if (response.plan) addToLog(`[Plan] ${response.plan}`);
+                if (response.memory) {
+                    addToLog(`[Memory] ${response.memory}`);
+                    memoryRef.current = response.memory;
+                }
+                
+                currentCode = response.code;
+
+                await captureAndContinue(currentCode);
+                setIterationTimes(prev => [...prev, Date.now() - iterationStartTimeRef.current]);
+            }
+            
+            addToLog('Maximum iterations reached. Evolution complete.');
+            setStatus(Status.Idle);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+            addToLog(`Error: ${errorMessage}`);
             setStatus(Status.Error);
         }
     };
     
-    const handleStop = () => {
-        if (status === Status.Generating || status === Status.Improving) {
-            addStatus("Stopping evolution after the current step...");
-            stopEvolvingRef.current = true;
-            // The running cycle will check this ref and stop.
-        }
-    };
-
-    const handleImprove = () => {
-        if (iterations.length > 0 && developerNotes.length > 0) {
-             stopEvolvingRef.current = false;
-             runImprovementCycle();
-        } else {
-            addStatus("Cannot improve: No initial code or no developer notes.");
-        }
-    };
-
-    const handleAddNote = (note: string) => {
-        setDeveloperNotes(prev => [...prev, note]);
-        addStatus(`Added note: "${note}"`);
-    };
-
-    const displayedCode = selectedIteration !== null ? iterations[selectedIteration]?.code : null;
-    const isRunning = status === Status.Generating || status === Status.Improving;
-
     return (
-        <div className="bg-gray-900 text-white min-h-screen font-sans flex flex-col">
+        <div className="bg-gray-800 text-white min-h-screen font-sans flex flex-col">
             <Header />
-            <main className="flex-grow p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <main className="flex-grow p-4 grid grid-cols-1 md:grid-cols-3 gap-4 h-[calc(100vh-68px)]">
                 {/* Left Panel */}
-                <div className="flex flex-col gap-4">
-                    <UserInput 
-                        value={gameConcept} 
-                        onChange={setGameConcept} 
-                        disabled={isRunning}
-                        onGenerateRandom={handleGenerateRandomIdea}
-                        isGeneratingIdea={isGeneratingIdea}
-                    />
+                <div className="md:col-span-1 flex flex-col gap-4 overflow-y-auto pr-2">
+                    <UserInput value={gameConcept} onChange={setGameConcept} disabled={isRunning} />
                     <GameTypeSelector value={gameType} onChange={setGameType} disabled={isRunning} />
-                    
-                    <div className="bg-gray-800/50 border border-gray-700 rounded-lg flex flex-col flex-grow">
+                    <ApiConfig 
+                        provider={llmConfig.provider}
+                        setProvider={(p) => setLlmConfig(c => ({...c, provider: p}))}
+                        apiKey={llmConfig.apiKey}
+                        setApiKey={(k) => setLlmConfig(c => ({...c, apiKey: k}))}
+                        baseUrl={llmConfig.baseUrl}
+                        setBaseUrl={(u) => setLlmConfig(c => ({...c, baseUrl: u}))}
+                        modelName={llmConfig.modelName}
+                        setModelName={(m) => setLlmConfig(c => ({...c, modelName: m}))}
+                        disabled={isRunning}
+                    />
+                    <Controls status={status} onStart={handleStart} onStop={handleStop} />
+                    <TimingStats 
+                        status={status}
+                        currentIteration={currentIterationNum}
+                        totalElapsed={totalElapsed}
+                        iterationTimes={iterationTimes}
+                    />
+                    <UserFeedback onSend={handleAddNote} disabled={!isRunning} />
+
+                    {/* Tabs */}
+                    <div className="flex-grow flex flex-col bg-black/30 rounded-lg border border-gray-700 min-h-[300px]">
                         <div className="flex border-b border-gray-700">
-                           <TabButton label="History" isActive={leftTab === 'history'} onClick={() => setLeftTab('history')} />
-                           <TabButton label="Dev Notes" isActive={leftTab === 'notes'} onClick={() => setLeftTab('notes')} />
+                            <TabButton label="Status Log" isActive={activeTab === 'status'} onClick={() => setActiveTab('status')} />
+                            <TabButton label="History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
+                            <TabButton label="Dev Notes" isActive={activeTab === 'notes'} onClick={() => setActiveTab('notes')} />
+                            <TabButton label="Usage" isActive={activeTab === 'usage'} onClick={() => setActiveTab('usage')} />
                         </div>
                         <div className="p-3 overflow-y-auto flex-grow">
-                            {leftTab === 'history' && <IterationHistory history={iterations} onSelect={setSelectedIteration} selectedIndex={selectedIteration} />}
-                            {leftTab === 'notes' && <DeveloperNotesLog notes={developerNotes} />}
+                            {activeTab === 'status' && <StatusLog history={statusHistory} />}
+                            {activeTab === 'history' && <IterationHistory history={iterationHistory} onSelect={handleSelectIteration} selectedIndex={selectedIterationIndex} />}
+                            {activeTab === 'notes' && <DeveloperNotesLog notes={developerNotes} />}
+                            {activeTab === 'usage' && <UsageStats history={usageHistory} />}
                         </div>
-                    </div>
-
-                    <UserFeedback onSend={handleAddNote} disabled={isRunning} />
-                </div>
-
-                {/* Center Panel */}
-                <div className="flex flex-col gap-4">
-                    <Controls
-                        status={status}
-                        onStart={handleStart}
-                        onStop={handleStop}
-                        onImprove={handleImprove}
-                        hasCode={iterations.length > 0}
-                        hasDevNotes={developerNotes.length > 0}
-                    />
-                    <div className="flex-grow min-h-[300px] lg:min-h-0">
-                        <GameDisplay ref={gameDisplayRef} htmlContent={displayedCode} />
                     </div>
                 </div>
 
                 {/* Right Panel */}
-                <div className="bg-gray-800/50 border border-gray-700 rounded-lg flex flex-col">
-                    <div className="flex border-b border-gray-700">
-                        <TabButton label="Status Log" isActive={rightTab === 'log'} onClick={() => setRightTab('log')} />
-                        <TabButton label="Config" isActive={rightTab === 'config'} onClick={() => setRightTab('config')} />
-                        <TabButton label="Usage" isActive={rightTab === 'stats'} onClick={() => setRightTab('stats')} />
-                    </div>
-                    <div className="p-3 overflow-y-auto flex-grow">
-                        {rightTab === 'log' && <StatusLog history={statusHistory} />}
-                        {rightTab === 'config' && (
-                             <div className="space-y-4">
-                                <ApiConfig 
-                                    provider={llmConfig.provider}
-                                    setProvider={(p) => setLlmConfig(c => ({...c, provider: p}))}
-                                    apiKey={llmConfig.apiKey}
-                                    setApiKey={(k) => setLlmConfig(c => ({...c, apiKey: k}))}
-                                    baseUrl={llmConfig.baseUrl}
-                                    setBaseUrl={(u) => setLlmConfig(c => ({...c, baseUrl: u}))}
-                                    modelName={llmConfig.modelName}
-                                    setModelName={(n) => setLlmConfig(c => ({...c, modelName: n}))}
-                                    disabled={isRunning}
-                                />
-                                <TimingStats 
-                                    totalElapsed={totalElapsedTime}
-                                    iterationTimes={iterationTimes}
-                                    currentIteration={iterations.length}
-                                    status={status}
-                                />
-                             </div>
-                        )}
-                        {rightTab === 'stats' && <UsageStats history={usageHistory} />}
-                    </div>
+                <div className="md:col-span-2 h-full">
+                    <GameDisplay ref={gameDisplayRef} htmlContent={currentHtml} />
                 </div>
             </main>
         </div>

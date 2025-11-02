@@ -1,4 +1,5 @@
 
+
 import { LlmConfig } from '../types';
 import * as geminiService from './geminiService';
 import * as openAiService from './openAiService';
@@ -14,7 +15,7 @@ export const generateInitialCode = (config: LlmConfig, gameConcept: string, game
   }
 };
 
-export const improveCode = (config: LlmConfig, code: string, screenshot: string, gameConcept: string, devNotesHistory: string[], newDevNote: string) => {
+export const improveCode = (config: LlmConfig, code: string, screenshot: string, gameConcept: string, devNotesHistory: string[], newDevNote?: string) => {
     switch (config.provider) {
         case 'gemini':
             return geminiService.improveCode(config, code, screenshot, gameConcept, devNotesHistory, newDevNote);

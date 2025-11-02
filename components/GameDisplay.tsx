@@ -26,22 +26,40 @@ export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlC
           return reject(new Error('Iframe not ready'));
         }
         
-        // A short delay to allow the canvas to render before capturing
-        setTimeout(() => {
-          try {
-            const canvas = iframe.contentWindow.document.querySelector('canvas');
-            if (!canvas) {
-              return reject(new Error('Canvas not found in iframe'));
+        const maxAttempts = 20; // 20 * 250ms = 5 seconds
+        let attempts = 0;
+
+        const pollForCanvas = () => {
+            try {
+                const canvas = iframe.contentWindow?.document.querySelector('canvas');
+                if (canvas) {
+                    // A very short delay after finding the canvas to allow for final render flush
+                    setTimeout(() => {
+                        try {
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            const base64 = dataUrl.split(',')[1];
+                            resolve(base64);
+                        } catch(e) {
+                           console.error('Screenshot capture failed:', e);
+                           reject(new Error('Failed to capture screenshot due to security or rendering issues.'));
+                        }
+                    }, 100);
+                } else {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(pollForCanvas, 250);
+                    } else {
+                        reject(new Error('Canvas not found in iframe after 5 seconds.'));
+                    }
+                }
+            } catch (e) {
+                 reject(new Error('Error accessing iframe content. This might be a cross-origin issue if loading external scripts failed.'));
             }
-            // toDataURL returns a base64 string, but we need to remove the prefix
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            const base64 = dataUrl.split(',')[1];
-            resolve(base64);
-          } catch (e) {
-            console.error('Screenshot capture failed:', e);
-            reject(new Error('Failed to capture screenshot due to security or rendering issues.'));
-          }
-        }, 500);
+        };
+
+        // The iframe's onLoad event can be unreliable with srcdoc and dynamic content.
+        // We start polling shortly after the content is set.
+        setTimeout(pollForCanvas, 250);
       });
     },
   }));
