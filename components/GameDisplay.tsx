@@ -3,13 +3,16 @@ import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react
 interface GameDisplayProps {
   htmlContent: string | null;
   onLoad?: () => void;
+  isLoading?: boolean;
+  statusText?: string;
+  currentIteration?: number;
 }
 
 export interface GameDisplayRef {
   captureScreenshot: () => Promise<string>;
 }
 
-export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlContent, onLoad }, ref) => {
+export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlContent, onLoad, isLoading, statusText, currentIteration }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -66,7 +69,16 @@ export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlC
 
 
   return (
-    <div className="w-full h-full bg-black border border-gray-700 rounded-lg overflow-hidden">
+    <div className="w-full h-full bg-black border border-gray-700 rounded-lg overflow-hidden relative">
+      {isLoading && (
+        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-10">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-500 mb-4"></div>
+          <p className="text-cyan-400 text-lg font-medium mb-2">{statusText || 'Loading...'}</p>
+          {currentIteration !== undefined && currentIteration > 0 && (
+            <p className="text-gray-400 text-sm">Iteration {currentIteration}</p>
+          )}
+        </div>
+      )}
       {htmlContent ? (
         <iframe
           ref={iframeRef}

@@ -31,8 +31,8 @@ export const TimingStats: React.FC<TimingStatsProps> = ({ totalElapsed, iteratio
   const isRunning = status === Status.Generating || status === Status.Improving;
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm">
-      <h3 className="text-base font-semibold text-gray-300 mb-2 text-center">Evolution Stats</h3>
+    <div className="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+      <h3 className="text-sm font-semibold text-gray-300 mb-1 text-center">Evolution Stats</h3>
        <div className="flex justify-between">
         <span className="text-gray-400">Current Iteration:</span>
         <span className="font-mono text-cyan-400">{isRunning ? currentIteration : '-'}</span>

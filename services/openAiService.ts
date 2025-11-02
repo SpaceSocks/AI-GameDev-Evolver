@@ -19,22 +19,47 @@ export const callOpenAI = async ({ prompt, apiKey, baseUrl, modelName }: OpenAiR
         throw new Error("OpenAI API key is required for cloud services. If using a local model, please provide a Base URL.");
     }
 
-    // This is a signature of the improvement prompt. We only want to request JSON for this.
-    const isImprovementPrompt = prompt.includes("Your multi-step process for this iteration is:");
+    // Detect improvement prompts (more flexible detection)
+    const isImprovementPrompt = prompt.includes("Output JSON:") || prompt.includes('"thought"') || prompt.includes("Improve this HTML game");
 
     const body: { [key: string]: any } = {
         model: modelName,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
+        temperature: 1,
     };
 
-    // Proactive Fix: Only add `response_format` if it's an improvement prompt AND we're using the official API.
-    // Local models (indicated by a baseUrl) often don't support this parameter.
-    if (isImprovementPrompt && !baseUrl) {
-        body.response_format = { type: 'json_object' };
+    // Add max tokens for improvement prompts - but be careful with reasoning models
+    if (isImprovementPrompt) {
+        // Check if it's a reasoning model (gpt-5-nano, o1, etc.)
+        const isReasoningModel = modelName.includes('nano') || modelName.includes('o1') || modelName.includes('reasoning');
+        
+        if (modelName.includes('gpt-5') || modelName.includes('o1')) {
+            // For reasoning models, don't set token limits - they allocate internally
+            // If we set max_completion_tokens, it might all go to reasoning with none for output
+            if (!isReasoningModel) {
+                body.max_completion_tokens = 16000; // Only for non-reasoning gpt-5 models
+            }
+        } else {
+            body.max_tokens = 8000; // For older models
+            // Only add response_format for older models that support it
+            if (!baseUrl) {
+                body.response_format = { type: 'json_object' };
+            }
+        }
     }
     
     try {
+        console.log("API Request:", {
+            url,
+            modelName,
+            isImprovementPrompt,
+            bodyKeys: Object.keys(body),
+            hasMaxTokens: !!body.max_tokens,
+            hasMaxCompletionTokens: !!body.max_completion_tokens,
+            hasResponseFormat: !!body.response_format,
+            promptLength: prompt.length
+        });
+        
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -43,6 +68,8 @@ export const callOpenAI = async ({ prompt, apiKey, baseUrl, modelName }: OpenAiR
             },
             body: JSON.stringify(body),
         });
+        
+        console.log("API Response status:", response.status);
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -55,10 +82,26 @@ export const callOpenAI = async ({ prompt, apiKey, baseUrl, modelName }: OpenAiR
         }
 
         const data = await response.json();
+        console.log("API Response structure:", {
+            hasChoices: !!data.choices,
+            choicesLength: data.choices?.length,
+            hasMessage: !!data.choices?.[0]?.message,
+            hasContent: !!data.choices?.[0]?.message?.content,
+            finishReason: data.choices?.[0]?.finish_reason,
+            usage: data.usage
+        });
+        
         const content = data.choices[0]?.message?.content;
         
         if (!content) {
-            throw new Error("Received an empty response from OpenAI-compatible API.");
+            const errorDetails = {
+                finishReason: data.choices?.[0]?.finish_reason,
+                usage: data.usage,
+                model: modelName,
+                hasBody: !!body.max_completion_tokens || !!body.max_tokens
+            };
+            console.error("Empty content error details:", errorDetails);
+            throw new Error(`Received an empty response from OpenAI-compatible API. Finish reason: ${data.choices?.[0]?.finish_reason || 'unknown'}. Usage: ${JSON.stringify(data.usage)}`);
         }
 
         return {

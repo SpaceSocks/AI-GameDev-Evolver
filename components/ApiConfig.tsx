@@ -30,8 +30,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
   };
 
   return (
-    <div className="space-y-3 bg-gray-900 border border-gray-700 rounded-lg p-3">
-       <h3 className="text-base font-semibold text-gray-300 text-center">LLM Configuration</h3>
+    <div className="space-y-1.5">
       <div>
         <label htmlFor="provider" className="block text-sm font-medium text-gray-300 mb-1">
           LLM Provider
@@ -41,7 +40,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
           value={provider}
           onChange={handleProviderChange}
           disabled={disabled}
-          className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
+          className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-1.5 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
         >
           <option value="gemini">Google Gemini</option>
           <option value="openai">OpenAI / Compatible</option>
@@ -56,7 +55,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
             <input
             type="text"
             id="baseUrl"
-            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
+            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-1.5 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
             placeholder="http://localhost:1234/v1 (for LM Studio)"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
@@ -73,7 +72,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
           <input
             type="password"
             id="apiKey"
-            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
+            className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-1.5 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
             placeholder="Required for cloud services"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
@@ -88,7 +87,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ provider, setProvider, api
         <input
           type="text"
           id="modelName"
-          className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
+          className="block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm p-1.5 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 text-sm"
           placeholder="e.g., gemini-2.5-pro or gpt-4o"
           value={modelName}
           onChange={(e) => setModelName(e.target.value)}
