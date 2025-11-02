@@ -80,7 +80,8 @@ export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlC
         const pollForCanvas = () => {
             try {
                 const canvas = iframe.contentWindow?.document.querySelector('canvas') as HTMLCanvasElement;
-                if (canvas) {
+                // Check if canvas exists AND has actual dimensions (not 0x0)
+                if (canvas && canvas.width > 0 && canvas.height > 0) {
                     setTimeout(() => {
                         try {
                             // Create a temporary canvas for compression
@@ -108,13 +109,13 @@ export const GameDisplay = forwardRef<GameDisplayRef, GameDisplayProps>(({ htmlC
                            console.error('Compressed screenshot capture failed:', e);
                            reject(new Error('Failed to capture compressed screenshot.'));
                         }
-                    }, 100);
+                    }, 500); // Increased delay to ensure canvas is fully rendered
                 } else {
                     attempts++;
                     if (attempts < maxAttempts) {
                         setTimeout(pollForCanvas, 250);
                     } else {
-                        reject(new Error('Canvas not found in iframe after 5 seconds.'));
+                        reject(new Error('Canvas not found or not initialized in iframe after 5 seconds.'));
                     }
                 }
             } catch (e) {
