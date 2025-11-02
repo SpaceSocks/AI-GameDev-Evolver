@@ -34,12 +34,12 @@ const improvementPrompt = (
     currentCode: string, 
     gameDescription: string, 
     gameType: GameType,
-    userFeedback: string, 
+    allDeveloperNotes: string[], 
     longTermMemory: string[], 
     shortTermPlans: string[],
     screenshotCount: number
 ) => `
-You are an expert game developer tasked with iteratively improving a game. You will be given the complete context of the project, including its original concept, your long-term memory of past development phases, your recent actions, and high-priority feedback from the user. Your goal is to be transparent about your thinking process.
+You are an expert game developer tasked with iteratively improving a game. You will be given the complete context of the project, including its original concept, your long-term memory of past development phases, your recent actions, and a persistent checklist of developer notes. Your goal is to be transparent about your thinking process.
 
 **Core Mandate: Performance is critical.** The game must run smoothly, targeting 60 FPS. Actively look for and fix performance bottlenecks, and do not introduce code that would cause significant lag. Analyze all proposed changes for performance impact before implementing them.
 ${screenshotCount > 0 ? ` You have also been provided a sequence of ${screenshotCount} screenshots, taken at intervals over a 15-second period, to show a broader scope of the gameplay and its progression.` : ""}
@@ -48,7 +48,8 @@ ${screenshotCount > 0 ? ` You have also been provided a sequence of ${screenshot
 **Game Type:** ${gameType === 'interactive' ? 'Interactive Game' : 'Visual Simulation'}
 ${gameType === 'simulation' ? '**IMPORTANT:** This is a visual simulation. Adhere strictly to the requirement of NO user interaction or controls.' : ''}
 
-**Developer's Notes (High Priority):** "${userFeedback || "No notes provided for this iteration."}"
+**All Developer Notes (Highest Priority Checklist):**
+${allDeveloperNotes.length > 0 ? allDeveloperNotes.map((note, i) => `${i + 1}. ${note}`).join('\n') : "No notes have been provided yet."}
 
 **Long-Term Memory (Summaries of past development phases):**
 ${longTermMemory.length > 0 ? longTermMemory.map((summary, i) => `Phase ${i + 1}: ${summary}`).join('\n') : "No long-term memories yet."}
@@ -63,8 +64,8 @@ ${currentCode}
 
 Your task is to follow these steps and provide your output in a structured JSON format:
 1.  **Analysis:** Review your long-term and short-term memory. Does your recent work align with the project's long-term goals, original concept, and specified game type? ${screenshotCount > 0 ? "Then, critically examine the sequence of screenshots. Describe how the game state evolves across the frames. " : ""}Finally, analyze the provided source code. How does it work? Are there any obvious bugs or areas for enhancement, especially regarding performance and adherence to the game type (interactive vs. simulation)?
-2.  **Thought:** Based on your analysis, the user's notes, and your memory, reason about what to do next. The user's notes are the most important directive. What is the single most important improvement to make right now? Consider the original game concept, the performance mandate, and the strict game type requirement. Think step-by-step about performance implications.
-3.  **Plan:** State a single, concrete, and implementable improvement for this iteration. This should be a concise summary of your thought process. Example: "I will optimize the render loop by only redrawing changed objects to improve performance."
+2.  **Thought:** Based on your analysis, reason about what to do next. Your PRIMARY directive is to work through the 'All Developer Notes' checklist. Review the entire list and the current code to determine which notes have been fully implemented. If there are outstanding notes, your plan for this iteration MUST address at least one of them. Once all notes appear to be implemented, you may proceed with general improvements based on the original game concept and performance mandates. Think step-by-step.
+3.  **Plan:** State a single, concrete, and implementable improvement for this iteration. This should be a concise summary of your thought process. Example: "I will address the note about jump height by increasing the player's jump velocity value."
 4.  **Implement:** Rewrite the ENTIRE 'index.html' file to incorporate your plan. Ensure the game remains fully functional, performant, and self-contained in one file, while strictly adhering to the game type.
 
 Respond ONLY with a JSON object that strictly follows the provided schema. Do not add any other text or markdown formatting.
@@ -98,14 +99,14 @@ export const improveGame = async (
     currentCode: string, 
     gameDescription: string,
     gameType: GameType,
-    userFeedback: string,
+    developerNotes: string[],
     longTermMemory: string[],
     shortTermPlans: string[],
     screenshotsBase64?: string[]
 ): Promise<{ newCode: string, analysis: string, thought: string, plan: string }> => {
     try {
         const model = 'gemini-2.5-pro';
-        const promptText = improvementPrompt(currentCode, gameDescription, gameType, userFeedback, longTermMemory, shortTermPlans, screenshotsBase64?.length ?? 0);
+        const promptText = improvementPrompt(currentCode, gameDescription, gameType, developerNotes, longTermMemory, shortTermPlans, screenshotsBase64?.length ?? 0);
         
         const parts: any[] = [];
         

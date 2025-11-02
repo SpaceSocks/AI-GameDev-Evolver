@@ -11,6 +11,7 @@ import { Status } from './types';
 import { generateInitialGame, improveGame, summarizeHistory } from './services/geminiService';
 import { GameTypeSelector, GameType } from './components/GameTypeSelector';
 import { TimingStats } from './components/TimingStats';
+import { DeveloperNotesLog } from './components/DeveloperNotesLog';
 
 interface Iteration {
     code: string;
@@ -32,7 +33,8 @@ const App: React.FC = () => {
     const [selectedIterationIndex, setSelectedIterationIndex] = useState<number | null>(null);
     const [pastPlans, setPastPlans] = useState<string[]>([]);
     const [longTermMemory, setLongTermMemory] = useState<string[]>([]);
-    const [currentTab, setCurrentTab] = useState<'log' | 'history'>('log');
+    const [developerNotesHistory, setDeveloperNotesHistory] = useState<string[]>([]);
+    const [currentTab, setCurrentTab] = useState<'log' | 'history' | 'notes'>('log');
     const [timingStats, setTimingStats] = useState<{
         startTime: number | null;
         iterationTimes: number[];
@@ -48,15 +50,16 @@ const App: React.FC = () => {
     const isGameLoadedRef = useRef(false);
     const iterationCounterRef = useRef(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const feedbackRef = useRef(''); // Use ref to avoid stale closures
+    const feedbackRef = useRef(''); 
+    const developerNotesHistoryRef = useRef<string[]>([]);
 
     const isRunning = status === Status.Generating || status === Status.Improving;
 
     useEffect(() => {
-        if (currentTab === 'log' && scrollContainerRef.current) {
+        if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
         }
-    }, [statusHistory, currentTab]);
+    }, [statusHistory, currentTab, developerNotesHistory]);
     
     useEffect(() => {
         let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -144,13 +147,13 @@ const App: React.FC = () => {
                 const screenshots = await takeScreenshots(SCREENSHOT_COUNT, SCREENSHOT_DURATION_MS);
                  if (stopRequestedRef.current) break;
 
-                const currentIterationFeedback = feedbackRef.current;
+                const allDeveloperNotes = developerNotesHistoryRef.current;
 
                 addToLog("Sending context to AI for analysis...");
                 const shortTermPlans = pastPlans.slice(-SHORT_TERM_MEMORY_LIMIT);
                 
                 addToLog("> AI is now thinking...");
-                const result = await improveGame(currentCode, concept, type, currentIterationFeedback, longTermMemory, shortTermPlans, screenshots.length > 0 ? screenshots : undefined);
+                const result = await improveGame(currentCode, concept, type, allDeveloperNotes, longTermMemory, shortTermPlans, screenshots.length > 0 ? screenshots : undefined);
 
                 if (stopRequestedRef.current) break;
                 
@@ -159,8 +162,8 @@ const App: React.FC = () => {
                 addToLog(`[Thought] ${result.thought}`);
                 addToLog(`[Plan] ${result.plan}`);
                 
-                if(currentIterationFeedback){
-                    feedbackRef.current = ''; // Clear feedback after use
+                if(feedbackRef.current){
+                    feedbackRef.current = ''; // Clear temporary feedback ref
                 }
 
                 addToLog("Applying new code and reloading game...");
@@ -206,12 +209,14 @@ const App: React.FC = () => {
         stopRequestedRef.current = false;
         isGameLoadedRef.current = false;
         feedbackRef.current = '';
+        developerNotesHistoryRef.current = [];
         setStatus(Status.Generating);
         setStatusHistory([]);
         setIterationHistory([]);
         setGameCode(null);
         setPastPlans([]);
         setLongTermMemory([]);
+        setDeveloperNotesHistory([]);
         setSelectedIterationIndex(null);
         setCurrentTab('log');
         setTimingStats({
@@ -270,8 +275,11 @@ const App: React.FC = () => {
 
 
     const handleSendFeedback = useCallback((feedback: string) => {
-        feedbackRef.current = feedback;
-        addToLog(`[Feedback] Notes queued for next iteration: "${feedback}"`);
+        const trimmedFeedback = feedback.trim();
+        feedbackRef.current = trimmedFeedback;
+        setDeveloperNotesHistory(prev => [...prev, trimmedFeedback]);
+        developerNotesHistoryRef.current.push(trimmedFeedback);
+        addToLog(`[Feedback] Note added to checklist: "${trimmedFeedback}"`);
     }, [addToLog]);
     
 
@@ -307,6 +315,7 @@ const App: React.FC = () => {
                         <div className="flex">
                             <TabButton label="Evolution Log" isActive={currentTab === 'log'} onClick={() => setCurrentTab('log')} />
                             <TabButton label="Review Iterations" isActive={currentTab === 'history'} onClick={() => setCurrentTab('history')} />
+                            <TabButton label="Developer Notes" isActive={currentTab === 'notes'} onClick={() => setCurrentTab('notes')} />
                         </div>
                     </div>
                     <div className="flex-grow relative">
@@ -319,6 +328,7 @@ const App: React.FC = () => {
                                     selectedIndex={selectedIterationIndex}
                                 />
                             )}
+                             {currentTab === 'notes' && <DeveloperNotesLog notes={developerNotesHistory} />}
                         </div>
                     </div>
                 </div>
