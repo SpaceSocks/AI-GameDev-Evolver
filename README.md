@@ -111,3 +111,10 @@ You must configure your local LLM server to allow requests from the origin where
 
 -   **For other local servers (like Ollama):**
     You will need to consult the documentation for your specific server software on how to enable CORS. This often involves setting a configuration variable or a command-line flag to allow all origins (`*`) or the specific origin of the app.
+
+### JSON Mode Incompatibility
+
+Some local "OpenAI-compatible" servers do not support the `response_format: { type: "json_object" }` feature that the official OpenAI API provides. This can lead to a `400 Bad Request` error.
+
+**How the App Handles This:**
+This application automatically detects when you are using a local server (by checking if a `Base URL` is provided). It will switch from `json_object` mode to a more compatible **text mode** and use a strict prompt to ensure the model still returns valid JSON. This should prevent this error from occurring in most cases.

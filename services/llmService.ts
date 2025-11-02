@@ -112,14 +112,13 @@ const improveGameOpenAI = async (
     config: LlmConfig, screenshotsBase64?: string[]
 ): Promise<{ result: ImprovementResult, inputChars: number }> => {
     
-    const systemPrompt = `You are an expert game developer tasked with iteratively improving a game. Your goal is to be transparent about your thinking process.
-**Core Mandate: Performance is critical.** The game must run smoothly, targeting 60 FPS. Actively look for and fix performance bottlenecks.
+    const systemPrompt = `You are an expert game developer iteratively improving a game.
+**CRITICAL:** Respond ONLY with a valid JSON object. Do not include markdown fences, explanations, or any other text outside the JSON structure.
 Your task is to follow these steps and provide your output in a structured JSON format with the keys "analysis", "thought", "plan", and "newCode".
-1.  **Analysis:** Review your memory, the original concept, the game type, and the provided screenshots if any. Analyze the source code for bugs, performance issues, and areas for enhancement.
+1.  **Analysis:** Review your memory, the original concept, the game type, and screenshots. Analyze the source code for bugs, performance issues, and enhancements.
 2.  **Thought:** Based on your analysis, reason about what to do next. Your PRIMARY directive is to work through the 'All Developer Notes' checklist. Address at least one outstanding note. If all notes are done, proceed with general improvements.
 3.  **Plan:** State a single, concrete, and implementable improvement for this iteration.
-4.  **Implement:** Rewrite the ENTIRE 'index.html' file to incorporate your plan. Ensure the game remains fully functional, performant, and self-contained.
-Respond ONLY with a valid JSON object matching the requested schema.`;
+4.  **Implement:** Rewrite the ENTIRE 'index.html' file to incorporate your plan. Ensure the game remains fully functional, performant, and self-contained.`;
     
     const userPromptText = `**Original Game Concept:** "${gameDescription}"
 **Game Type:** ${gameType === 'interactive' ? 'Interactive Game' : 'Visual Simulation'}
@@ -149,18 +148,43 @@ ${currentCode}
         });
     }
 
-    const requestBody = {
+    const requestBody: any = {
         messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userContent }
         ],
-        response_format: { type: "json_object" },
         temperature: 0.5,
     };
 
+    // Use json_object mode for official OpenAI API, but fallback to text for local/custom servers.
+    if (!config.baseUrl) {
+        requestBody.response_format = { type: "json_object" };
+    }
+
     const response = await callOpenAICompatible(config, requestBody);
     const jsonText = response.choices[0]?.message?.content?.trim() ?? '{}';
-    const result: ImprovementResult = JSON.parse(jsonText);
+    
+    let result: ImprovementResult;
+
+    try {
+        result = JSON.parse(jsonText);
+    } catch (e) {
+        console.warn("Failed to parse JSON directly, attempting to extract from text.");
+        const match = jsonText.match(/\{.*\}/s);
+        if (match) {
+            try {
+                result = JSON.parse(match[0]);
+            } catch (parseError) {
+                throw new LlmError("Failed to parse extracted JSON from model response.", config.provider, config.modelName, { originalJson: jsonText, error: parseError });
+            }
+        } else {
+            throw new LlmError("Received a non-JSON response and could not find a JSON object within it.", config.provider, config.modelName, { originalResponse: jsonText });
+        }
+    }
+
+    if (!result.analysis || !result.thought || !result.plan || !result.newCode) {
+         throw new LlmError("Parsed JSON is missing one or more required keys (analysis, thought, plan, newCode).", config.provider, config.modelName, { parsedJson: result });
+    }
 
     return { result, inputChars: JSON.stringify(requestBody).length };
 }
